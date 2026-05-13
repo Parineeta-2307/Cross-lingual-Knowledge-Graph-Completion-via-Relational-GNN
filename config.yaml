@@ -1,0 +1,84 @@
+# ==============================================================================
+# Cross-lingual Knowledge Graph Completion — Configuration
+# ==============================================================================
+# All hyperparameters and paths are defined here. No magic numbers in code.
+# To re-run the pipeline with different settings, edit this file only.
+# ==============================================================================
+
+# --- Data Pipeline Settings ---
+data:
+  languages: ["de", "ja", "nl", "en"]  # en is used as bridge language for alignment
+  domain: "tech_companies"
+  sparql_endpoint: "https://query.wikidata.org/sparql"
+  sparql_page_size: 500          # LIMIT per SPARQL query (Wikidata throttles large pages)
+  sparql_max_retries: 5          # Exponential backoff: 2^n seconds between retries
+  sparql_retry_base_seconds: 2   # Base for exponential backoff (2, 4, 8, 16, 32)
+  cache_ttl_days: 7              # How many days before cached SPARQL results expire
+  min_triples_per_entity: 2      # Entities with fewer triples are dropped (noise filter)
+  sample_limit: 200              # DEFAULT mode: fetch 200 triples per query (fast dev iteration)
+  full_page_size: 500            # --full mode: paginate with this LIMIT per page
+  
+  # Directory paths (relative to project root)
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  cache_dir: "data/cache"
+  cache_db_name: "wikidata_cache.db"
+
+# --- Entity Alignment Settings ---
+alignment:
+  # This model is 12x smaller than full mBERT but still multilingual.
+  # It handles DE, JA, NL, EN in a single model. CPU-friendly (~50ms per batch).
+  model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  similarity_threshold: 0.85     # Cosine similarity cutoff for entity matching
+  min_neighbor_overlap: 2        # Gap #1 fix: require ≥2 shared neighbors for disambiguation
+  batch_size: 32                 # Embedding batch size (tuned for CPU, increase on GPU)
+
+# --- Unified Graph Construction ---
+graph:
+  cold_start_degree_threshold: 2  # Gap #5: nodes with degree < this are flagged cold-start
+  train_ratio: 0.8                # Edge-level split (not node-level)
+  val_ratio: 0.1
+  test_ratio: 0.1
+
+# --- R-GCN Model Architecture ---
+model:
+  embedding_dim: 128       # Final entity embedding dimensionality
+  hidden_dim: 256          # Hidden layer dimensionality in R-GCN
+  num_rgcn_layers: 2       # Number of R-GCN message-passing layers
+  num_bases: 30            # Basis decomposition for relation-specific weight matrices
+  dropout: 0.2             # Dropout between R-GCN layers (regularization)
+  scoring_function: "rotate"  # Options: "transe" | "rotate" (RotatE is more expressive)
+
+# --- Training Configuration (for Colab T4 GPU) ---
+training:
+  epochs: 300
+  batch_size: 1024           # Number of triples per training batch
+  learning_rate: 0.001       # Adam optimizer initial LR
+  weight_decay: 0.00001      # L2 regularization strength
+  negative_samples_per_positive: 64  # Gap #2: negative triples per positive triple
+  margin: 1.0                # Margin for ranking loss: max(0, margin - pos + neg)
+  early_stopping_patience: 10  # Stop if val MRR doesn't improve for this many epochs
+  checkpoint_dir: "checkpoints"
+  checkpoint_name: "best_model.pt"
+  # Colab Google Drive path for saving checkpoints
+  gdrive_checkpoint_path: "/content/drive/MyDrive/kg_project/best_model.pt"
+
+# --- Evaluation Settings ---
+evaluation:
+  top_k: [1, 3, 10]          # Compute Hits@1, Hits@3, Hits@10
+  filtered: true              # Gap #6: ALWAYS use filtered ranking (research standard)
+  results_dir: "evaluation"
+
+# --- Inference Settings ---
+inference:
+  top_k_predictions: 5        # Return top-5 predicted tails for a query
+  cold_start_fallback: true   # Gap #5: use embedding-only scoring for cold-start nodes
+  fuzzy_match_threshold: 80   # Fuzzy string match threshold for entity name lookup (0-100)
+
+# --- FastAPI Application ---
+app:
+  host: "127.0.0.1"
+  port: 8000
+  debug: false
+  title: "Cross-lingual Knowledge Graph Explorer"
+  description: "Predicting missing facts across languages using R-GCN"

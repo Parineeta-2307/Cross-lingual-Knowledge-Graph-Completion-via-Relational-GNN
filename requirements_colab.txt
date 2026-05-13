@@ -1,0 +1,32 @@
+# ==============================================================================
+# Cross-lingual KG Completion — Colab (T4 GPU + CUDA) Dependencies
+# ==============================================================================
+#
+# Use this file in Google Colab notebooks. The first cell should run:
+#   !pip install -r requirements_colab.txt
+#
+# NOTE: torch with CUDA is pre-installed in Colab, but we pin the version
+# for reproducibility.
+# ==============================================================================
+
+# --- Core ML (CUDA-enabled) ---
+torch==2.2.0+cu118
+torch-geometric==2.5.2
+
+# --- NLP / Embeddings ---
+sentence-transformers==2.7.0
+transformers==4.40.0
+
+# --- Data / Scientific Computing ---
+SPARQLWrapper==2.0.0
+networkx==3.2.1
+scikit-learn==1.4.2
+numpy==1.26.4
+pandas==2.2.1
+
+# --- Configuration ---
+pyyaml==6.0.1
+
+# --- Utilities ---
+tqdm==4.66.4
+loguru==0.7.2
